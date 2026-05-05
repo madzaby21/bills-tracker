@@ -5,7 +5,7 @@ import "./styles.css";
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
-const PEOPLE = ["Madz", "Aby", "Nick", "Joy", "Tin", "Rea", "Kuya Rodel"];
+const PEOPLE = ["Madz", "Aby", "Nick", "Joy", "Tin", "Rea", "Rodel"];
 const ADMIN   = "Madz"; // change this to your name — admin sees everything
 
 const CARDS = [
