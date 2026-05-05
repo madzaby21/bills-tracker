@@ -191,6 +191,7 @@ export default function App() {
 
   useEffect(function () {
     isLoadedRef.current = false;
+    isDirtyRef.current = false;
     if (cache[year] && cache[year][month] !== undefined) {
       isLoadedRef.current = true;
       return;
@@ -217,10 +218,12 @@ export default function App() {
     });
   }, [year, month]);
 
-  // ── Auto-save ───────────────────────────────────────────────────────────
+  // ── Auto-save — only fires on user changes, never on load ─────────────
+
+  const isDirtyRef = useRef(false);
 
   useEffect(function () {
-    if (!isLoadedRef.current) return;
+    if (!isDirtyRef.current) return;
     const monthData = (cache[year] && cache[year][month]) ? cache[year][month] : null;
     if (!monthData) return;
     setSaveStatus("saving");
@@ -251,6 +254,7 @@ export default function App() {
   }
 
   function mutateCard(y: number, m: number, cid: string, fn: (c: CardData) => CardData) {
+    isDirtyRef.current = true;
     setCache(function (prev) {
       const next: Cache = JSON.parse(JSON.stringify(prev));
       if (!next[y])    next[y] = {};
