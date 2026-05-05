@@ -190,11 +190,11 @@ export default function App() {
   // ── Load month ──────────────────────────────────────────────────────────
 
   useEffect(function () {
+    isLoadedRef.current = false;
     if (cache[year] && cache[year][month] !== undefined) {
       isLoadedRef.current = true;
       return;
     }
-    isLoadedRef.current = false;
     setLoadingMonth(true);
     loadMonth(year, month).then(function (md) {
       setCache(function (prev) {
@@ -204,7 +204,7 @@ export default function App() {
         return next;
       });
       setLoadingMonth(false);
-      isLoadedRef.current = true;
+      setTimeout(function () { isLoadedRef.current = true; }, 500);
     }).catch(function () {
       setCache(function (prev) {
         const next = { ...prev };
@@ -213,7 +213,7 @@ export default function App() {
         return next;
       });
       setLoadingMonth(false);
-      isLoadedRef.current = true;
+      setTimeout(function () { isLoadedRef.current = true; }, 500);
     });
   }, [year, month]);
 
