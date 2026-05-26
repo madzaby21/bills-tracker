@@ -764,19 +764,18 @@ export default function App() {
                   </button>
                 );
               })}
+              {isAdmin && (
+                <button className="add-card-btn" onClick={function () { setShowAddCard(true); }}>
+                  + Add Card
+                </button>
+              )}
+              {isAdmin && (
+                <button className="add-card-btn" style={{ borderColor:"rgba(74,222,128,.4)", color:"#4ade80" }}
+                  onClick={function () { setShowAddPerson(true); }}>
+                  + Add Person
+                </button>
+              )}
             </div>
-
-            {isAdmin && (
-              <button className="add-card-btn" onClick={function () { setShowAddCard(true); }}>
-                + Add Card
-              </button>
-            )}
-            {isAdmin && (
-              <button className="add-card-btn" style={{ borderColor:"rgba(74,222,128,.4)", color:"#4ade80" }}
-                onClick={function () { setShowAddPerson(true); }}>
-                + Add Person
-              </button>
-            )}
 
             <div className="editor" style={{ borderColor: meta.color + "35" }}>
               <div className="ed-head">
