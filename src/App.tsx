@@ -71,9 +71,9 @@ function monthKey(y: number, m: number): string {
 function emptyCard(): CardData {
   return { dueDay: "", totalBill: "", paid: false, transactions: [] };
 }
-function emptyTx(): Omit<Transaction, "id"> {
+function emptyTx(peopleList: string[]): Omit<Transaction, "id"> {
   const amounts: { [p: string]: string } = {};
-  people.forEach(function (p) { amounts[p] = ""; });
+  peopleList.forEach(function (p) { amounts[p] = ""; });
   return { name: "", date: "", installment: "", amounts };
 }
 function uid(): string {
@@ -298,7 +298,7 @@ export default function App() {
   }
 
   function addTx(cid: string) {
-    const newTx = { id: uid(), ...emptyTx() };
+    const newTx = { id: uid(), ...emptyTx(people) };
     mutateCard(year, month, cid, function (c) {
       return { ...c, transactions: [...(c.transactions || []), newTx] };
     });
