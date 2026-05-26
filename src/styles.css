@@ -64,10 +64,10 @@ input:focus { outline: none; }
 .year-display { font-family:Georgia,serif; font-size:18px; color:#FDF3E3; min-width:48px; text-align:center; }
 
 /* ── Detail layout ── */
-.detail-layout { display:grid; grid-template-columns:200px 1fr; gap:10px; align-items:start; height:calc(100vh - 140px); }
+.detail-layout { display:grid; grid-template-columns:200px 1fr; gap:10px; align-items:start; }
 
 /* ── Sidebar ── */
-.sidebar { display:flex; flex-direction:column; gap:5px; height:100%; overflow-y:auto; }
+.sidebar { display:flex; flex-direction:column; gap:5px; overflow-y:auto; overflow-x:hidden; }
 .side-btn { background:rgba(250,129,40,.06); border:1px solid rgba(250,129,40,0.15); border-radius:8px; padding:8px 10px; cursor:pointer; text-align:left; display:flex; align-items:center; gap:8px; transition:all .15s; }
 .side-btn:hover { transform:translateY(-1px); background:rgba(250,129,40,.1); }
 .side-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
@@ -110,7 +110,7 @@ input:focus { outline: none; }
 .grand-chip .pchip-name { color:#E07830; }
 
 /* ── Transaction table ── */
-.tx-scroll { overflow:auto; margin-bottom:12px; flex:1; }
+.tx-scroll { overflow:auto; margin-bottom:12px; max-height:calc(100vh - 380px); }
 .empty-msg { padding:28px; text-align:center; color:#B84A08; font-size:13px; }
 
 .tx-tbl { width:100%; border-collapse:collapse; table-layout:fixed; }
