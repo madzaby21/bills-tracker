@@ -163,7 +163,7 @@ export default function App() {
   const [cache, setCache]             = useState<Cache>({});
   const [year, setYear]               = useState(today.getFullYear());
   const [month, setMonth]             = useState(today.getMonth());
-  const [activeCard, setActiveCard]   = useState(CARDS[0].id);
+  const [activeCard, setActiveCard]   = useState(DEFAULT_CARDS[0].id);
   const [view, setView]               = useState<"detail" | "summary" | "audit">("detail");
   const [loadingMonth, setLoadingMonth] = useState(false);
   const [saveStatus, setSaveStatus]   = useState<"saving"|"saved"|"error">("saved");
