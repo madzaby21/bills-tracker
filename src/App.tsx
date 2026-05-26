@@ -90,16 +90,16 @@ function fmtN(n: number): string {
   if (n === 0) return "—";
   return n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-function txTotal(tx: Transaction): number {
-  return people.reduce(function (s, p) { return s + toNum(tx.amounts[p]); }, 0);
+function txTotal(tx: Transaction, peopleList: string[] = DEFAULT_PEOPLE): number {
+  return peopleList.reduce(function (s, p) { return s + toNum(tx.amounts[p]); }, 0);
 }
 function cardPersonTotal(card: CardData, person: string): number {
   return (card.transactions || []).reduce(function (s, tx) {
     return s + toNum(tx.amounts[person]);
   }, 0);
 }
-function cardGrandTotal(card: CardData): number {
-  return people.reduce(function (s, p) { return s + cardPersonTotal(card, p); }, 0);
+function cardGrandTotal(card: CardData, peopleList: string[] = DEFAULT_PEOPLE): number {
+  return peopleList.reduce(function (s, p) { return s + cardPersonTotal(card, p); }, 0);
 }
 function formatDate(d: string): string {
   if (!d) return "";
@@ -608,7 +608,7 @@ export default function App() {
                         {tx.installment && <span className="copy-tx-inst">{tx.installment}</span>}
                         {tx.date && <span className="copy-tx-date">{tx.date}</span>}
                       </div>
-                      <div className="copy-tx-amt">{fmtN(txTotal(tx))}</div>
+                      <div className="copy-tx-amt">{fmtN(txTotal(tx, people))}</div>
                     </div>
                   );
                 })}
@@ -746,7 +746,7 @@ export default function App() {
             <div className="sidebar">
               {cards.map(function (c) {
                 const cd    = getCard(year, month, c.id);
-                const grand = cardGrandTotal(cd);
+                const grand = cardGrandTotal(cd, people);
                 const on    = activeCard === c.id;
                 return (
                   <button key={c.id} className={on ? "side-btn on" : "side-btn"}
@@ -797,7 +797,7 @@ export default function App() {
                   </div>
                   <div className="ed-field">
                     <label className="ed-lbl">Statement Total (₱)</label>
-                    <div className="auto-total">{cardGrandTotal(acd) > 0 ? fmt(cardGrandTotal(acd)) : "—"}</div>
+                    <div className="auto-total">{cardGrandTotal(acd, people) > 0 ? fmt(cardGrandTotal(acd, people)) : "—"}</div>
                   </div>
                 </div>
                 <div className={acd.paid ? "paid-pill on" : "paid-pill"} onClick={function () { togglePaid(activeCard); }}>
@@ -843,7 +843,7 @@ export default function App() {
                   })}
                   <div className="person-chip grand-chip">
                     <div className="pchip-name">TOTAL</div>
-                    <div className="pchip-amt on">{fmt(cardGrandTotal(acd))}</div>
+                    <div className="pchip-amt on">{fmt(cardGrandTotal(acd, people))}</div>
                   </div>
                 </div>
               )}
@@ -868,7 +868,7 @@ export default function App() {
                         </thead>
                         <tbody>
                           {(acd.transactions || []).map(function (tx, i) {
-                            const rt = txTotal(tx);
+                            const rt = txTotal(tx, people);
                             return (
                               <tr key={tx.id}
                                 className={i % 2 === 0 ? "tr" : "tr alt"}
@@ -928,7 +928,7 @@ export default function App() {
                               const t = cardPersonTotal(acd, p);
                               return <td key={p} className="td"><span className={t > 0 ? "col-tot on" : "col-tot"}>{t > 0 ? fmtN(t) : "—"}</span></td>;
                             })}
-                            <td className="td"><span className="col-tot on grand">{fmtN(cardGrandTotal(acd))}</span></td>
+                            <td className="td"><span className="col-tot on grand">{fmtN(cardGrandTotal(acd, people))}</span></td>
                             <td className="td" />
                           </tr>
                         </tfoot>
@@ -975,11 +975,11 @@ export default function App() {
                   <tbody>
                     {cards.map(function (c) {
                       const cd    = getCard(year, month, c.id);
-                      const grand = cardGrandTotal(cd);
+                      const grand = cardGrandTotal(cd, people);
                       return (
                         <tr key={c.id} className={cd.paid ? "str paid" : "str"}
                           onClick={function () { setActiveCard(c.id); setView("detail"); }}>
-                          <td className="std"><div className="scard-name"><span className="sdot" style={{ background: c.color }} /><span>{c.name}</span>{cardGrandTotal(cd) > 0 && <span className="s-stmt"> {fmt(cardGrandTotal(cd))}</span>}</div></td>
+                          <td className="std"><div className="scard-name"><span className="sdot" style={{ background: c.color }} /><span>{c.name}</span>{cardGrandTotal(cd, people) > 0 && <span className="s-stmt"> {fmt(cardGrandTotal(cd, people))}</span>}</div></td>
                           <td className="std"><span className="s-due">{cd.dueDay ? formatDate(cd.dueDay) : "—"}</span></td>
                           {people.map(function (p) {
                             const t = cardPersonTotal(cd, p);
