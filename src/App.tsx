@@ -281,6 +281,61 @@ export default function App() {
     });
   }
 
+  // ── Card management ──────────────────────────────────────────────────────
+
+  function saveCards(newCards: CardDef[]) {
+    setCards(newCards);
+    setDoc(doc(db, "config", "cards"), { list: newCards }).catch(function () {});
+  }
+
+  function addCard() {
+    const name = newCardName.trim();
+    if (!name) { showBanner("Enter a card name", "warn"); return; }
+    const id = name.toLowerCase().replace(/[^a-z0-9]/g, "_") + "_" + Date.now().toString(36);
+    const newCard: CardDef = { id, name, color: newCardColor };
+    saveCards([...cards, newCard]);
+    setNewCardName("");
+    setNewCardColor("#FA8128");
+    setShowAddCard(false);
+    showBanner(name + " added!", "success");
+    logAudit({ who: currentUser, action: "added", detail: "Added new card: " + name, card: name, month: MONTHS[month] + " " + year, ts: Date.now() });
+  }
+
+  function removeCard(cardId: string) {
+    const card = cards.find(function (c) { return c.id === cardId; });
+    if (!card) return;
+    if (!window.confirm("Remove " + card.name + "? Existing transaction data is kept in Firebase.")) return;
+    saveCards(cards.filter(function (c) { return c.id !== cardId; }));
+    showBanner(card.name + " removed from list", "warn");
+  }
+
+  // ── People management ─────────────────────────────────────────────────────
+
+  function savePeople(newPeople: string[]) {
+    setPeople(newPeople);
+    setDoc(doc(db, "config", "people"), { list: newPeople }).catch(function () {});
+  }
+
+  function addPerson() {
+    const name = newPersonName.trim();
+    if (!name) { showBanner("Enter a name", "warn"); return; }
+    if (people.find(function (p) { return p.toLowerCase() === name.toLowerCase(); })) {
+      showBanner(name + " already exists", "warn"); return;
+    }
+    savePeople([...people, name]);
+    setNewPersonName("");
+    setShowAddPerson(false);
+    showBanner(name + " added!", "success");
+    logAudit({ who: currentUser, action: "added", detail: "Added new person: " + name, card: "—", month: MONTHS[month] + " " + year, ts: Date.now() });
+  }
+
+  function removePerson(name: string) {
+    if (DEFAULT_PEOPLE.includes(name)) { showBanner("Cannot remove original members", "warn"); return; }
+    if (!window.confirm("Remove " + name + " from the list?")) return;
+    savePeople(people.filter(function (p) { return p !== name; }));
+    showBanner(name + " removed", "warn");
+  }
+
   function updateCardField(cid: string, field: "dueDay"|"totalBill", val: string) {
     mutateCard(year, month, cid, function (c) { return { ...c, [field]: val }; });
   }
