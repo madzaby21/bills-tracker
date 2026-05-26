@@ -5,10 +5,10 @@ import "./styles.css";
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
-const PEOPLE = ["Madz", "Aby", "Nick", "Joy", "Tin", "Rea", "Rodel"];
+const DEFAULT_PEOPLE = ["Madz", "Aby", "Nick", "Joy", "Tin", "Rea", "Rodel"];
 const ADMIN   = "Madz"; // change this to your name — admin sees everything
 
-const CARDS = [
+const DEFAULT_CARDS: CardDef[] = [
   { id: "bdo_shopmore",   name: "BDO Shopmore",       color: "#B91C1C" },
   { id: "bdo_amex",       name: "BDO AmEx",           color: "#B45309" },
   { id: "bpi",            name: "BPI",                color: "#1D4ED8" },
@@ -25,6 +25,12 @@ const MONTHS = [
 ];
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
+
+interface CardDef {
+  id: string;
+  name: string;
+  color: string;
+}
 
 interface Transaction {
   id: string;
@@ -67,7 +73,7 @@ function emptyCard(): CardData {
 }
 function emptyTx(): Omit<Transaction, "id"> {
   const amounts: { [p: string]: string } = {};
-  PEOPLE.forEach(function (p) { amounts[p] = ""; });
+  people.forEach(function (p) { amounts[p] = ""; });
   return { name: "", date: "", installment: "", amounts };
 }
 function uid(): string {
@@ -85,7 +91,7 @@ function fmtN(n: number): string {
   return n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function txTotal(tx: Transaction): number {
-  return PEOPLE.reduce(function (s, p) { return s + toNum(tx.amounts[p]); }, 0);
+  return people.reduce(function (s, p) { return s + toNum(tx.amounts[p]); }, 0);
 }
 function cardPersonTotal(card: CardData, person: string): number {
   return (card.transactions || []).reduce(function (s, tx) {
@@ -93,7 +99,7 @@ function cardPersonTotal(card: CardData, person: string): number {
   }, 0);
 }
 function cardGrandTotal(card: CardData): number {
-  return PEOPLE.reduce(function (s, p) { return s + cardPersonTotal(card, p); }, 0);
+  return people.reduce(function (s, p) { return s + cardPersonTotal(card, p); }, 0);
 }
 function formatDate(d: string): string {
   if (!d) return "";
@@ -142,6 +148,17 @@ export default function App() {
   const [nameInput, setNameInput] = useState("");
   const isAdmin = currentUser === ADMIN;
 
+  // ── Cards (dynamic) ──
+  const [cards, setCards] = useState<CardDef[]>(DEFAULT_CARDS);
+  const [showAddCard, setShowAddCard] = useState(false);
+  const [newCardName, setNewCardName] = useState("");
+  const [newCardColor, setNewCardColor] = useState("#FA8128");
+
+  // ── People (dynamic) ──
+  const [people, setPeople] = useState<string[]>(DEFAULT_PEOPLE);
+  const [showAddPerson, setShowAddPerson] = useState(false);
+  const [newPersonName, setNewPersonName] = useState("");
+
   // ── Data ──
   const [cache, setCache]             = useState<Cache>({});
   const [year, setYear]               = useState(today.getFullYear());
@@ -176,7 +193,7 @@ export default function App() {
 
   function submitName() {
     const name = nameInput.trim();
-    const matched = PEOPLE.find(function (p) {
+    const matched = people.find(function (p) {
       return p.toLowerCase() === name.toLowerCase();
     });
     if (!matched) {
@@ -272,7 +289,7 @@ export default function App() {
     const card = getCard(year, month, cid);
     const newPaid = !card.paid;
     mutateCard(year, month, cid, function (c) { return { ...c, paid: newPaid }; });
-    const cardName = CARDS.find(function (c) { return c.id === cid; })?.name || cid;
+    const cardName = cards.find(function (c) { return c.id === cid; })?.name || cid;
     logAudit({
       who: currentUser, action: newPaid ? "paid" : "unpaid",
       detail: cardName + " marked as " + (newPaid ? "Paid" : "Unpaid"),
@@ -285,7 +302,7 @@ export default function App() {
     mutateCard(year, month, cid, function (c) {
       return { ...c, transactions: [...(c.transactions || []), newTx] };
     });
-    const cardName = CARDS.find(function (c) { return c.id === cid; })?.name || cid;
+    const cardName = cards.find(function (c) { return c.id === cid; })?.name || cid;
     logAudit({
       who: currentUser, action: "added",
       detail: "New transaction added to " + cardName,
@@ -299,7 +316,7 @@ export default function App() {
     mutateCard(year, month, cid, function (c) {
       return { ...c, transactions: c.transactions.filter(function (t) { return t.id !== txId; }) };
     });
-    const cardName = CARDS.find(function (c) { return c.id === cid; })?.name || cid;
+    const cardName = cards.find(function (c) { return c.id === cid; })?.name || cid;
     logAudit({
       who: currentUser, action: "removed",
       detail: "Removed \"" + (tx?.name || "transaction") + "\" from " + cardName,
@@ -332,7 +349,7 @@ export default function App() {
 
   // Log field edits on blur
   function logEdit(cid: string, txName: string) {
-    const cardName = CARDS.find(function (c) { return c.id === cid; })?.name || cid;
+    const cardName = cards.find(function (c) { return c.id === cid; })?.name || cid;
     logAudit({
       who: currentUser, action: "edited",
       detail: "Edited \"" + (txName || "transaction") + "\" in " + cardName,
@@ -384,7 +401,7 @@ export default function App() {
       return { ...c, transactions: [...(c.transactions || []), { ...tx, id: uid() }] };
     });
 
-    const cardName = CARDS.find(function (c) { return c.id === activeCard; })?.name || activeCard;
+    const cardName = cards.find(function (c) { return c.id === activeCard; })?.name || activeCard;
     logAudit({
       who: currentUser, action: "moved",
       detail: "Moved \"" + tx.name + "\" from " + MONTHS[month] + " " + year + " → " + MONTHS[toMonth] + " " + toYear,
@@ -442,7 +459,7 @@ export default function App() {
       return { ...c, transactions: [...(c.transactions || []), ...newTxs] };
     });
 
-    const cardName = CARDS.find(function (c) { return c.id === fromCardId; })?.name || fromCardId;
+    const cardName = cards.find(function (c) { return c.id === fromCardId; })?.name || fromCardId;
     logAudit({
       who: currentUser, action: "copied",
       detail: "Copied " + txsToCopy.length + " transaction(s) to " + MONTHS[toMonth] + " " + toYear,
@@ -465,7 +482,7 @@ export default function App() {
   }
 
   function grandPersonTotal(person: string): number {
-    return CARDS.reduce(function (s, c) {
+    return cards.reduce(function (s, c) {
       return s + cardPersonTotal(getCard(year, month, c.id), person);
     }, 0);
   }
@@ -496,7 +513,7 @@ export default function App() {
 
   // ── Main render ─────────────────────────────────────────────────────────
 
-  const meta = CARDS.find(function (c) { return c.id === activeCard; }) || CARDS[0];
+  const meta = cards.find(function (c) { return c.id === activeCard; }) || CARDS[0];
   const acd  = getCard(year, month, activeCard);
 
   const filteredAudit = auditCard === "all"
@@ -550,7 +567,7 @@ export default function App() {
       {/* ── COPY MODAL ── */}
       {copyModal && (function () {
         const srcCard  = getCard(year, month, copyModal.fromCardId);
-        const cardMeta = CARDS.find(function (c) { return c.id === copyModal.fromCardId; }) || CARDS[0];
+        const cardMeta = cards.find(function (c) { return c.id === copyModal.fromCardId; }) || CARDS[0];
         return (
           <div className="modal-backdrop" onClick={function () { setCopyModal(null); }}>
             <div className="modal modal-wide" onClick={function (e) { e.stopPropagation(); }}>
@@ -608,6 +625,76 @@ export default function App() {
         );
       })()}
 
+      {/* ── ADD CARD MODAL ── */}
+      {showAddCard && (
+        <div className="modal-backdrop" onClick={function () { setShowAddCard(false); }}>
+          <div className="modal" onClick={function (e) { e.stopPropagation(); }}>
+            <div className="modal-title">Add New Card</div>
+            <div className="modal-body">
+              <div className="modal-row">
+                <label className="modal-lbl">Card Name</label>
+                <input className="modal-sel" style={{ flex:1 }} value={newCardName}
+                  placeholder="e.g. RCBC Credit Card"
+                  onChange={function (e) { setNewCardName(e.target.value); }}
+                  onKeyDown={function (e) { if (e.key === "Enter") addCard(); }}
+                  autoFocus />
+              </div>
+              <div className="modal-row">
+                <label className="modal-lbl">Color</label>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <input type="color" value={newCardColor}
+                    onChange={function (e) { setNewCardColor(e.target.value); }}
+                    style={{ width:40, height:32, border:"none", background:"none", cursor:"pointer" }} />
+                  <span style={{ fontSize:12, color:"#A67C3A" }}>{newCardColor}</span>
+                  <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                    {["#B91C1C","#B45309","#1D4ED8","#059669","#7C3AED","#475569","#EA580C","#FA8128","#DB2777","#0891B2"].map(function (c) {
+                      return (
+                        <div key={c} onClick={function () { setNewCardColor(c); }}
+                          style={{ width:20, height:20, borderRadius:"50%", background:c, cursor:"pointer", border: newCardColor === c ? "2px solid #fff" : "2px solid transparent" }} />
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, padding:"10px 14px", background:"rgba(250,129,40,.08)", borderRadius:8 }}>
+              <div style={{ width:12, height:12, borderRadius:"50%", background:newCardColor, boxShadow:"0 0 8px " + newCardColor }} />
+              <span style={{ fontSize:13, color:"#FDF3E3" }}>{newCardName || "Card Name Preview"}</span>
+            </div>
+            <div className="modal-actions">
+              <button className="modal-cancel" onClick={function () { setShowAddCard(false); }}>Cancel</button>
+              <button className="modal-confirm" onClick={addCard}>Add Card</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ADD PERSON MODAL ── */}
+      {showAddPerson && (
+        <div className="modal-backdrop" onClick={function () { setShowAddPerson(false); }}>
+          <div className="modal" onClick={function (e) { e.stopPropagation(); }}>
+            <div className="modal-title">Add New Person</div>
+            <div className="modal-body">
+              <div className="modal-row">
+                <label className="modal-lbl">Name</label>
+                <input className="modal-sel" style={{ flex:1 }} value={newPersonName}
+                  placeholder="e.g. Dana, Marco..."
+                  onChange={function (e) { setNewPersonName(e.target.value); }}
+                  onKeyDown={function (e) { if (e.key === "Enter") addPerson(); }}
+                  autoFocus />
+              </div>
+            </div>
+            <div className="modal-note">
+              This person will appear as a column in all cards across all months.
+            </div>
+            <div className="modal-actions">
+              <button className="modal-cancel" onClick={function () { setShowAddPerson(false); }}>Cancel</button>
+              <button className="modal-confirm" onClick={addPerson}>Add Person</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── HEADER ── */}
       <div className="header">
         <div>
@@ -657,7 +744,7 @@ export default function App() {
         {view === "detail" && isAdmin && (
           <div className="detail-layout">
             <div className="sidebar">
-              {CARDS.map(function (c) {
+              {cards.map(function (c) {
                 const cd    = getCard(year, month, c.id);
                 const grand = cardGrandTotal(cd);
                 const on    = activeCard === c.id;
@@ -679,10 +766,25 @@ export default function App() {
               })}
             </div>
 
+            {isAdmin && (
+              <button className="add-card-btn" onClick={function () { setShowAddCard(true); }}>
+                + Add Card
+              </button>
+            )}
+            {isAdmin && (
+              <button className="add-card-btn" style={{ borderColor:"rgba(74,222,128,.4)", color:"#4ade80" }}
+                onClick={function () { setShowAddPerson(true); }}>
+                + Add Person
+              </button>
+            )}
+
             <div className="editor" style={{ borderColor: meta.color + "35" }}>
               <div className="ed-head">
                 <div className="ed-dot" style={{ background: meta.color, boxShadow: "0 0 10px " + meta.color }} />
                 <div className="ed-title">{meta.name}</div>
+                {isAdmin && !DEFAULT_CARDS.find(function (c) { return c.id === meta.id; }) && (
+                  <button className="remove-card-btn" onClick={function () { removeCard(meta.id); }} title="Remove this card">Remove Card</button>
+                )}
                 <div className="spacer" />
                 {/* History toggle for this card */}
                 <button className={showHistory ? "hist-btn on" : "hist-btn"} onClick={function () { setAuditCard(meta.name); setShowHistory(function (v) { return !v; }); }}>
@@ -726,11 +828,16 @@ export default function App() {
 
               {(acd.transactions || []).length > 0 && (
                 <div className="person-bar">
-                  {PEOPLE.map(function (p) {
+                  {people.map(function (p) {
                     const t = cardPersonTotal(acd, p);
                     return (
                       <div key={p} className="person-chip">
-                        <div className="pchip-name">{p}</div>
+                        <div className="pchip-name">
+                          {p}
+                          {isAdmin && !DEFAULT_PEOPLE.includes(p) && (
+                            <span className="pchip-remove" onClick={function () { removePerson(p); }} title={"Remove " + p}>×</span>
+                          )}
+                        </div>
                         <div className={t > 0 ? "pchip-amt on" : "pchip-amt"}>{t > 0 ? fmt(t) : "—"}</div>
                       </div>
                     );
@@ -755,7 +862,7 @@ export default function App() {
                             <th className="th name-col">Transaction Name</th>
                             <th className="th date-col">Date</th>
                             <th className="th inst-col">Installment</th>
-                            {PEOPLE.map(function (p) { return <th key={p} className="th amt-col">{p}</th>; })}
+                            {people.map(function (p) { return <th key={p} className="th amt-col">{p}</th>; })}
                             <th className="th amt-col">Row Total</th>
                             <th className="th act-col">Actions</th>
                           </tr>
@@ -789,7 +896,7 @@ export default function App() {
                                     onChange={function (e) { updateTxField(activeCard, tx.id, "installment", e.target.value); }}
                                     onBlur={function () { logEdit(activeCard, tx.name); }} />
                                 </td>
-                                {PEOPLE.map(function (p) {
+                                {people.map(function (p) {
                                   return (
                                     <td key={p} className="td">
                                       <input className="cell-inp num-inp" type="number"
@@ -818,7 +925,7 @@ export default function App() {
                           <tr className="foot-row">
                             <td className="td" />
                             <td className="td foot-lbl" colSpan={3}>Column Totals</td>
-                            {PEOPLE.map(function (p) {
+                            {people.map(function (p) {
                               const t = cardPersonTotal(acd, p);
                               return <td key={p} className="td"><span className={t > 0 ? "col-tot on" : "col-tot"}>{t > 0 ? fmtN(t) : "—"}</span></td>;
                             })}
@@ -861,13 +968,13 @@ export default function App() {
                     <tr>
                       <th className="sth card-col">Card</th>
                       <th className="sth">Due Date</th>
-                      {PEOPLE.map(function (p) { return <th key={p} className="sth amt-col">{p}</th>; })}
+                      {people.map(function (p) { return <th key={p} className="sth amt-col">{p}</th>; })}
                       <th className="sth amt-col">Card Total</th>
                       <th className="sth">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {CARDS.map(function (c) {
+                    {cards.map(function (c) {
                       const cd    = getCard(year, month, c.id);
                       const grand = cardGrandTotal(cd);
                       return (
@@ -875,7 +982,7 @@ export default function App() {
                           onClick={function () { setActiveCard(c.id); setView("detail"); }}>
                           <td className="std"><div className="scard-name"><span className="sdot" style={{ background: c.color }} /><span>{c.name}</span>{cardGrandTotal(cd) > 0 && <span className="s-stmt"> {fmt(cardGrandTotal(cd))}</span>}</div></td>
                           <td className="std"><span className="s-due">{cd.dueDay ? formatDate(cd.dueDay) : "—"}</span></td>
-                          {PEOPLE.map(function (p) {
+                          {people.map(function (p) {
                             const t = cardPersonTotal(cd, p);
                             return <td key={p} className="std amt-col"><span className={t > 0 ? "s-amt" : "s-nil"}>{t > 0 ? fmtN(t) : "—"}</span></td>;
                           })}
@@ -888,11 +995,11 @@ export default function App() {
                   <tfoot>
                     <tr className="sfoot">
                       <td className="std sfoot-lbl" colSpan={2}>Grand Total per Person</td>
-                      {PEOPLE.map(function (p) {
+                      {people.map(function (p) {
                         const t = grandPersonTotal(p);
                         return <td key={p} className="std amt-col"><span className={t > 0 ? "sfoot-tot" : "s-nil"}>{t > 0 ? fmt(t) : "—"}</span></td>;
                       })}
-                      <td className="std amt-col"><span className="sfoot-grand">{fmt(CARDS.reduce(function (s, c) { return s + cardGrandTotal(getCard(year, month, c.id)); }, 0))}</span></td>
+                      <td className="std amt-col"><span className="sfoot-grand">{fmt(cards.reduce(function (s, c) { return s + cardGrandTotal(getCard(year, month, c.id)); }, 0))}</span></td>
                       <td className="std" />
                     </tr>
                   </tfoot>
@@ -906,7 +1013,7 @@ export default function App() {
                   <div className="my-total-amt">{fmt(grandPersonTotal(currentUser))}</div>
                 </div>
                 <div className="my-cards">
-                  {CARDS.map(function (c) {
+                  {cards.map(function (c) {
                     const cd = getCard(year, month, c.id);
                     const myTxs = (cd.transactions || []).filter(function (tx) { return toNum(tx.amounts[currentUser]) > 0; });
                     const myTotal = cardPersonTotal(cd, currentUser);
@@ -954,9 +1061,9 @@ export default function App() {
             {/* Per-person breakdown (admin only) */}
             {isAdmin && (
               <div className="breakdown-grid">
-                {PEOPLE.map(function (p) {
+                {people.map(function (p) {
                   const total    = grandPersonTotal(p);
-                  const hasCards = CARDS.filter(function (c) { return cardPersonTotal(getCard(year, month, c.id), p) > 0; });
+                  const hasCards = cards.filter(function (c) { return cardPersonTotal(getCard(year, month, c.id), p) > 0; });
                   return (
                     <div key={p} className="bc">
                       <div className="bc-name">{p}</div>
@@ -990,7 +1097,7 @@ export default function App() {
               <select className="modal-sel" style={{ width:200 }} value={auditCard}
                 onChange={function (e) { setAuditCard(e.target.value); }}>
                 <option value="all">All Cards</option>
-                {CARDS.map(function (c) { return <option key={c.id} value={c.name}>{c.name}</option>; })}
+                {cards.map(function (c) { return <option key={c.id} value={c.name}>{c.name}</option>; })}
               </select>
             </div>
             <div className="audit-list">
