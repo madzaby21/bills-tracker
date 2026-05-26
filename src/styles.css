@@ -401,3 +401,46 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.6);
   cursor: pointer;
 }
+
+/* ── Add Card button ── */
+.add-card-btn {
+  margin-top: 8px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px dashed rgba(250,129,40,.4);
+  background: transparent;
+  color: #FA8128;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  letter-spacing: .04em;
+}
+.add-card-btn:hover { background: rgba(250,129,40,.1); border-style: solid; }
+
+/* ── Remove Card button ── */
+.remove-card-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(239,68,68,.3);
+  background: transparent;
+  color: #ef4444;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .15s;
+}
+.remove-card-btn:hover { background: rgba(239,68,68,.1); }
+
+/* ── Person chip remove button ── */
+.pchip-remove {
+  cursor: pointer;
+  color: #ef4444;
+  font-size: 10px;
+  margin-left: 3px;
+  opacity: 0.6;
+  transition: opacity .15s;
+}
+.pchip-remove:hover { opacity: 1; }
