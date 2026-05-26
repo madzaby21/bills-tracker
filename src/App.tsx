@@ -513,7 +513,7 @@ export default function App() {
 
   // ── Main render ─────────────────────────────────────────────────────────
 
-  const meta = cards.find(function (c) { return c.id === activeCard; }) || CARDS[0];
+  const meta = cards.find(function (c) { return c.id === activeCard; }) || DEFAULT_CARDS[0];
   const acd  = getCard(year, month, activeCard);
 
   const filteredAudit = auditCard === "all"
@@ -567,7 +567,7 @@ export default function App() {
       {/* ── COPY MODAL ── */}
       {copyModal && (function () {
         const srcCard  = getCard(year, month, copyModal.fromCardId);
-        const cardMeta = cards.find(function (c) { return c.id === copyModal.fromCardId; }) || CARDS[0];
+        const cardMeta = cards.find(function (c) { return c.id === copyModal.fromCardId; }) || DEFAULT_CARDS[0];
         return (
           <div className="modal-backdrop" onClick={function () { setCopyModal(null); }}>
             <div className="modal modal-wide" onClick={function (e) { e.stopPropagation(); }}>
