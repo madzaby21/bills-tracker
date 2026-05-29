@@ -44,6 +44,7 @@ interface CardData {
   dueDay: string;
   totalBill: string;
   paid: boolean;
+  paidBy: { [person: string]: boolean }; // ← NEW: per-person paid flags
   transactions: Transaction[];
 }
 
@@ -69,7 +70,7 @@ function monthKey(y: number, m: number): string {
   return y + "-" + String(m + 1).padStart(2, "0");
 }
 function emptyCard(): CardData {
-  return { dueDay: "", totalBill: "", paid: false, transactions: [] };
+  return { dueDay: "", totalBill: "", paid: false, paidBy: {}, transactions: [] };
 }
 function emptyTx(peopleList: string[]): Omit<Transaction, "id"> {
   const amounts: { [p: string]: string } = {};
@@ -267,7 +268,9 @@ export default function App() {
   // ── Data helpers ────────────────────────────────────────────────────────
 
   function getCard(y: number, m: number, cid: string): CardData {
-    return (cache[y] && cache[y][m] && cache[y][m][cid]) ? cache[y][m][cid] : emptyCard();
+    const raw = (cache[y] && cache[y][m] && cache[y][m][cid]) ? cache[y][m][cid] : emptyCard();
+    // Ensure paidBy always exists (backwards compat for old data)
+    return { ...raw, paidBy: raw.paidBy || {} };
   }
 
   function mutateCard(y: number, m: number, cid: string, fn: (c: CardData) => CardData) {
@@ -276,7 +279,10 @@ export default function App() {
       const next: Cache = JSON.parse(JSON.stringify(prev));
       if (!next[y])    next[y] = {};
       if (!next[y][m]) next[y][m] = {};
-      next[y][m][cid] = fn(next[y][m][cid] || emptyCard());
+      const existing = next[y][m][cid] || emptyCard();
+      // Ensure paidBy exists on existing data
+      if (!existing.paidBy) existing.paidBy = {};
+      next[y][m][cid] = fn(existing);
       return next;
     });
   }
@@ -340,6 +346,8 @@ export default function App() {
     mutateCard(year, month, cid, function (c) { return { ...c, [field]: val }; });
   }
 
+  // ── Toggle card-level paid ───────────────────────────────────────────────
+
   function togglePaid(cid: string) {
     const card = getCard(year, month, cid);
     const newPaid = !card.paid;
@@ -350,6 +358,26 @@ export default function App() {
       detail: cardName + " marked as " + (newPaid ? "Paid" : "Unpaid"),
       card: cardName, month: MONTHS[month] + " " + year, ts: Date.now(),
     });
+  }
+
+  // ── Toggle per-person paid ───────────────────────────────────────────────
+
+  function togglePersonPaid(cid: string, person: string) {
+    // Non-admin can only toggle themselves
+    if (!isAdmin && person !== currentUser) return;
+    const card = getCard(year, month, cid);
+    const currentlyPaid = !!(card.paidBy && card.paidBy[person]);
+    const newPaid = !currentlyPaid;
+    mutateCard(year, month, cid, function (c) {
+      return { ...c, paidBy: { ...(c.paidBy || {}), [person]: newPaid } };
+    });
+    const cardName = cards.find(function (c) { return c.id === cid; })?.name || cid;
+    logAudit({
+      who: currentUser, action: newPaid ? "paid" : "unpaid",
+      detail: person + " marked as " + (newPaid ? "Paid" : "Unpaid") + " for " + cardName,
+      card: cardName, month: MONTHS[month] + " " + year, ts: Date.now(),
+    });
+    showBanner(person + (newPaid ? " marked as Paid ✓" : " marked as Unpaid"), newPaid ? "success" : "warn");
   }
 
   function addTx(cid: string) {
@@ -803,6 +831,8 @@ export default function App() {
                 const cd    = getCard(year, month, c.id);
                 const grand = cardGrandTotal(cd, people);
                 const on    = activeCard === c.id;
+                // Count how many people have paid for this card
+                const paidCount = people.filter(function (p) { return cd.paidBy && cd.paidBy[p]; }).length;
                 return (
                   <button key={c.id} className={on ? "side-btn on" : "side-btn"}
                     style={on ? { borderColor: c.color + "70", background: c.color + "14" } : {}}
@@ -813,6 +843,9 @@ export default function App() {
                       <div className="side-meta">
                         <span className={grand > 0 ? "side-total" : "side-empty"}>{grand > 0 ? fmt(grand) : "No entries"}</span>
                         {cd.dueDay && <span className="side-due"> · due {formatDate(cd.dueDay)}</span>}
+                        {paidCount > 0 && (
+                          <span style={{ marginLeft:4, fontSize:10, color:"#34d399" }}>· {paidCount}/{people.length} paid</span>
+                        )}
                       </div>
                     </div>
                     {cd.paid && <span className="chk">✓</span>}
@@ -857,7 +890,7 @@ export default function App() {
                 </div>
                 <div className={acd.paid ? "paid-pill on" : "paid-pill"} onClick={function () { togglePaid(activeCard); }}>
                   <div className={acd.paid ? "pill-thumb on" : "pill-thumb"} />
-                  <span>{acd.paid ? "Paid" : "Unpaid"}</span>
+                  <span>{acd.paid ? "Card Paid" : "Card Unpaid"}</span>
                 </div>
               </div>
 
@@ -880,10 +913,13 @@ export default function App() {
                 </div>
               )}
 
+              {/* ── PER-PERSON PAID STATUS BAR (in Detail view) ── */}
               {(acd.transactions || []).length > 0 && (
                 <div className="person-bar">
                   {people.map(function (p) {
-                    const t = cardPersonTotal(acd, p);
+                    const t       = cardPersonTotal(acd, p);
+                    const isPaid  = !!(acd.paidBy && acd.paidBy[p]);
+                    const canToggle = isAdmin || p === currentUser;
                     return (
                       <div key={p} className="person-chip">
                         <div className="pchip-name">
@@ -893,6 +929,16 @@ export default function App() {
                           )}
                         </div>
                         <div className={t > 0 ? "pchip-amt on" : "pchip-amt"}>{t > 0 ? fmt(t) : "—"}</div>
+                        {/* Per-person paid toggle */}
+                        {t > 0 && (
+                          <div
+                            className={isPaid ? "person-paid-toggle paid" : "person-paid-toggle unpaid"}
+                            style={{ cursor: canToggle ? "pointer" : "default", opacity: canToggle ? 1 : 0.4 }}
+                            title={canToggle ? (isPaid ? "Mark " + p + " as Unpaid" : "Mark " + p + " as Paid") : "Only " + p + " or admin can toggle"}
+                            onClick={function () { if (canToggle) togglePersonPaid(activeCard, p); }}>
+                            {isPaid ? "✓ Paid" : "✗ Unpaid"}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1015,7 +1061,7 @@ export default function App() {
             </div>
 
             {isAdmin ? (
-              /* Admin: full table */
+              /* Admin: full table with per-person paid toggles */
               <div className="sum-scroll">
                 <table className="sum-tbl">
                   <thead>
@@ -1024,7 +1070,7 @@ export default function App() {
                       <th className="sth">Due Date</th>
                       {people.map(function (p) { return <th key={p} className="sth amt-col">{p}</th>; })}
                       <th className="sth amt-col">Card Total</th>
-                      <th className="sth">Status</th>
+                      <th className="sth">Card Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1032,16 +1078,47 @@ export default function App() {
                       const cd    = getCard(year, month, c.id);
                       const grand = cardGrandTotal(cd, people);
                       return (
-                        <tr key={c.id} className={cd.paid ? "str paid" : "str"}
-                          onClick={function () { setActiveCard(c.id); setView("detail"); }}>
-                          <td className="std"><div className="scard-name"><span className="sdot" style={{ background: c.color }} /><span>{c.name}</span>{cardGrandTotal(cd, people) > 0 && <span className="s-stmt"> {fmt(cardGrandTotal(cd, people))}</span>}</div></td>
+                        <tr key={c.id} className={cd.paid ? "str paid" : "str"}>
+                          <td className="std" onClick={function () { setActiveCard(c.id); setView("detail"); }} style={{ cursor:"pointer" }}>
+                            <div className="scard-name">
+                              <span className="sdot" style={{ background: c.color }} />
+                              <span>{c.name}</span>
+                              {grand > 0 && <span className="s-stmt"> {fmt(grand)}</span>}
+                            </div>
+                          </td>
                           <td className="std"><span className="s-due">{cd.dueDay ? formatDate(cd.dueDay) : "—"}</span></td>
                           {people.map(function (p) {
-                            const t = cardPersonTotal(cd, p);
-                            return <td key={p} className="std amt-col"><span className={t > 0 ? "s-amt" : "s-nil"}>{t > 0 ? fmtN(t) : "—"}</span></td>;
+                            const t      = cardPersonTotal(cd, p);
+                            const isPaid = !!(cd.paidBy && cd.paidBy[p]);
+                            return (
+                              <td key={p} className="std amt-col">
+                                {t > 0 ? (
+                                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                                    <span className="s-amt">{fmtN(t)}</span>
+                                    <span
+                                      className={isPaid ? "person-paid-badge paid" : "person-paid-badge unpaid"}
+                                      onClick={function () { togglePersonPaid(c.id, p); }}
+                                      title={isPaid ? "Mark " + p + " unpaid" : "Mark " + p + " paid"}
+                                      style={{ cursor:"pointer" }}>
+                                      {isPaid ? "✓ Paid" : "Unpaid"}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="s-nil">—</span>
+                                )}
+                              </td>
+                            );
                           })}
                           <td className="std amt-col"><span className={grand > 0 ? "s-grand" : "s-nil"}>{grand > 0 ? fmt(grand) : "—"}</span></td>
-                          <td className="std"><span className={cd.paid ? "badge paid" : "badge unpaid"}>{cd.paid ? "Paid" : "Unpaid"}</span></td>
+                          <td className="std">
+                            <span
+                              className={cd.paid ? "badge paid" : "badge unpaid"}
+                              onClick={function () { togglePaid(c.id); }}
+                              style={{ cursor:"pointer" }}
+                              title="Toggle card paid status">
+                              {cd.paid ? "Paid" : "Unpaid"}
+                            </span>
+                          </td>
                         </tr>
                       );
                     })}
@@ -1060,7 +1137,7 @@ export default function App() {
                 </table>
               </div>
             ) : (
-              /* Non-admin: only their charges */
+              /* Non-admin: only their charges + self-toggle paid */
               <div className="my-bills-view">
                 <div className="my-total-box">
                   <div className="my-total-label">Your total for {MONTHS[month]}</div>
@@ -1071,6 +1148,7 @@ export default function App() {
                     const cd = getCard(year, month, c.id);
                     const myTxs = (cd.transactions || []).filter(function (tx) { return toNum(tx.amounts[currentUser]) > 0; });
                     const myTotal = cardPersonTotal(cd, currentUser);
+                    const iMePaid = !!(cd.paidBy && cd.paidBy[currentUser]);
                     if (myTotal === 0) return null;
                     return (
                       <div key={c.id} className="my-card">
@@ -1078,7 +1156,14 @@ export default function App() {
                           <div className="my-card-name"><span className="bc-dot" style={{ background: c.color }} />{c.name}</div>
                           <div className="my-card-due">{cd.dueDay ? "Due: " + formatDate(cd.dueDay) : ""}</div>
                           <div className="my-card-total">{fmt(myTotal)}</div>
-                          <span className={cd.paid ? "badge paid" : "badge unpaid"}>{cd.paid ? "Paid" : "Unpaid"}</span>
+                          {/* Self-toggle paid */}
+                          <span
+                            className={iMePaid ? "badge paid" : "badge unpaid"}
+                            onClick={function () { togglePersonPaid(c.id, currentUser); }}
+                            style={{ cursor:"pointer" }}
+                            title={iMePaid ? "Mark my share as unpaid" : "Mark my share as paid"}>
+                            {iMePaid ? "✓ I Paid" : "Mark as Paid"}
+                          </span>
                         </div>
                         <table className="my-tx-table">
                           <thead>
@@ -1118,18 +1203,37 @@ export default function App() {
                 {people.map(function (p) {
                   const total    = grandPersonTotal(p);
                   const hasCards = cards.filter(function (c) { return cardPersonTotal(getCard(year, month, c.id), p) > 0; });
+                  // Count paid cards for this person
+                  const paidCardCount = hasCards.filter(function (c) {
+                    const cd = getCard(year, month, c.id);
+                    return cd.paidBy && cd.paidBy[p];
+                  }).length;
                   return (
                     <div key={p} className="bc">
                       <div className="bc-name">{p}</div>
                       <div className="bc-total">{total > 0 ? fmt(total) : "—"}</div>
+                      {hasCards.length > 0 && (
+                        <div style={{ fontSize:11, color: paidCardCount === hasCards.length ? "#34d399" : "#f87171", marginBottom:4 }}>
+                          {paidCardCount}/{hasCards.length} cards paid
+                        </div>
+                      )}
                       <div className="bc-lines">
                         {hasCards.map(function (c) {
-                          const t = cardPersonTotal(getCard(year, month, c.id), p);
+                          const cd     = getCard(year, month, c.id);
+                          const t      = cardPersonTotal(cd, p);
+                          const isPaid = !!(cd.paidBy && cd.paidBy[p]);
                           return (
                             <div key={c.id} className="bc-line">
                               <span className="bc-dot" style={{ background: c.color }} />
                               <span className="bc-cname">{c.name}</span>
                               <span className="bc-amt">{fmtN(t)}</span>
+                              <span
+                                className={isPaid ? "person-paid-badge paid" : "person-paid-badge unpaid"}
+                                onClick={function () { togglePersonPaid(c.id, p); }}
+                                style={{ cursor:"pointer", marginLeft:4 }}
+                                title={isPaid ? "Mark unpaid" : "Mark paid"}>
+                                {isPaid ? "✓" : "·"}
+                              </span>
                             </div>
                           );
                         })}
