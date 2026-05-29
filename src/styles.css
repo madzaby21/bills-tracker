@@ -444,3 +444,63 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   transition: opacity .15s;
 }
 .pchip-remove:hover { opacity: 1; }
+
+/* ── PER-PERSON PAID TOGGLE (in person chips / detail view) ── */
+.person-paid-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  transition: all 0.15s ease;
+  user-select: none;
+  width: 100%;
+}
+.person-paid-toggle.paid {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+}
+.person-paid-toggle.unpaid {
+  background: rgba(248, 113, 113, 0.1);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.25);
+}
+.person-paid-toggle.paid:hover {
+  background: rgba(52, 211, 153, 0.25);
+}
+.person-paid-toggle.unpaid:hover {
+  background: rgba(248, 113, 113, 0.2);
+}
+
+/* ── PER-PERSON PAID BADGE (in summary table & breakdown grid) ── */
+.person-paid-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.person-paid-badge.paid {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+.person-paid-badge.unpaid {
+  background: rgba(248, 113, 113, 0.08);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.2);
+}
+.person-paid-badge.paid:hover {
+  background: rgba(52, 211, 153, 0.25);
+}
+.person-paid-badge.unpaid:hover {
+  background: rgba(248, 113, 113, 0.18);
+}
