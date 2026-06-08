@@ -160,6 +160,11 @@ export default function App() {
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [newPersonName, setNewPersonName] = useState("");
 
+  // ── Hidden people per card (admin only, persisted in Firebase) ──
+  // Shape: { [cardId]: ["Nick", "Joy", ...] }
+  const [hiddenPeople, setHiddenPeople] = useState<{ [cardId: string]: string[] }>({});
+  const [showHiddenFor, setShowHiddenFor] = useState<string | null>(null); // cardId whose hidden list is revealed
+
   // ── Data ──
   const [cache, setCache]             = useState<Cache>({});
   const [year, setYear]               = useState(today.getFullYear());
@@ -264,6 +269,41 @@ export default function App() {
     });
     return unsub;
   }, []);
+
+  // ── Hidden people — load from Firebase on mount ────────────────────────
+
+  useEffect(function () {
+    getDoc(doc(db, "config", "hiddenPeople")).then(function (snap) {
+      if (snap.exists() && snap.data()?.map) {
+        setHiddenPeople(snap.data().map as { [cardId: string]: string[] });
+      }
+    }).catch(function () {});
+  }, []);
+
+  function saveHiddenPeople(next: { [cardId: string]: string[] }) {
+    setHiddenPeople(next);
+    setDoc(doc(db, "config", "hiddenPeople"), { map: next }).catch(function () {});
+  }
+
+  function hidePersonFromCard(cardId: string, person: string) {
+    const current = hiddenPeople[cardId] || [];
+    if (current.includes(person)) return;
+    saveHiddenPeople({ ...hiddenPeople, [cardId]: [...current, person] });
+  }
+
+  function showPersonOnCard(cardId: string, person: string) {
+    const current = hiddenPeople[cardId] || [];
+    saveHiddenPeople({ ...hiddenPeople, [cardId]: current.filter(function (p) { return p !== person; }) });
+  }
+
+  function visiblePeople(cardId: string): string[] {
+    const hidden = hiddenPeople[cardId] || [];
+    return people.filter(function (p) { return !hidden.includes(p); });
+  }
+
+  function hiddenPeopleForCard(cardId: string): string[] {
+    return (hiddenPeople[cardId] || []).filter(function (p) { return people.includes(p); });
+  }
 
   // ── Data helpers ────────────────────────────────────────────────────────
 
@@ -916,15 +956,23 @@ export default function App() {
               {/* ── PER-PERSON PAID STATUS BAR (in Detail view) ── */}
               {(acd.transactions || []).length > 0 && (
                 <div className="person-bar">
-                  {people.map(function (p) {
+                  {visiblePeople(activeCard).map(function (p) {
                     const t       = cardPersonTotal(acd, p);
                     const isPaid  = !!(acd.paidBy && acd.paidBy[p]);
                     const canToggle = isAdmin || p === currentUser;
+                    const canHide   = isAdmin && t === 0;
                     return (
                       <div key={p} className="person-chip">
                         <div className="pchip-name">
                           {p}
-                          {isAdmin && !DEFAULT_PEOPLE.includes(p) && (
+                          {/* Hide button: admin only, zero balance only */}
+                          {canHide && (
+                            <span
+                              className="pchip-hide"
+                              title={"Hide " + p + " from this card"}
+                              onClick={function () { hidePersonFromCard(activeCard, p); }}>×</span>
+                          )}
+                          {isAdmin && !DEFAULT_PEOPLE.includes(p) && t > 0 && (
                             <span className="pchip-remove" onClick={function () { removePerson(p); }} title={"Remove " + p}>×</span>
                           )}
                         </div>
@@ -946,6 +994,32 @@ export default function App() {
                     <div className="pchip-name">TOTAL</div>
                     <div className="pchip-amt on">{fmt(cardGrandTotal(acd, people))}</div>
                   </div>
+                  {/* Show hidden people restore area (admin only) */}
+                  {isAdmin && hiddenPeopleForCard(activeCard).length > 0 && (
+                    <div className="person-chip hidden-chip">
+                      <div
+                        className="pchip-name"
+                        style={{ cursor:"pointer", color: showHiddenFor === activeCard ? "#FA8128" : "#C85A10" }}
+                        onClick={function () { setShowHiddenFor(showHiddenFor === activeCard ? null : activeCard); }}>
+                        {hiddenPeopleForCard(activeCard).length} hidden {showHiddenFor === activeCard ? "▴" : "▾"}
+                      </div>
+                      {showHiddenFor === activeCard && (
+                        <div className="hidden-people-list">
+                          {hiddenPeopleForCard(activeCard).map(function (p) {
+                            return (
+                              <div key={p} className="hidden-person-row">
+                                <span>{p}</span>
+                                <span
+                                  className="restore-btn"
+                                  onClick={function () { showPersonOnCard(activeCard, p); }}
+                                  title={"Show " + p + " again"}>show</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -962,7 +1036,7 @@ export default function App() {
                             <th className="th name-col">Transaction Name</th>
                             <th className="th date-col">Date</th>
                             <th className="th inst-col">Installment</th>
-                            {people.map(function (p) { return <th key={p} className="th amt-col">{p}</th>; })}
+                            {visiblePeople(activeCard).map(function (p) { return <th key={p} className="th amt-col">{p}</th>; })}
                             <th className="th amt-col">Row Total</th>
                             <th className="th act-col">Actions</th>
                           </tr>
@@ -996,7 +1070,7 @@ export default function App() {
                                     onChange={function (e) { updateTxField(activeCard, tx.id, "installment", e.target.value); }}
                                     onBlur={function () { logEdit(activeCard, tx.name); }} />
                                 </td>
-                                {people.map(function (p) {
+                                {visiblePeople(activeCard).map(function (p) {
                                   return (
                                     <td key={p} className="td">
                                       <input className="cell-inp num-inp" type="number"
@@ -1025,7 +1099,7 @@ export default function App() {
                           <tr className="foot-row">
                             <td className="td" />
                             <td className="td foot-lbl" colSpan={3}>Column Totals</td>
-                            {people.map(function (p) {
+                            {visiblePeople(activeCard).map(function (p) {
                               const t = cardPersonTotal(acd, p);
                               return <td key={p} className="td"><span className={t > 0 ? "col-tot on" : "col-tot"}>{t > 0 ? fmtN(t) : "—"}</span></td>;
                             })}
