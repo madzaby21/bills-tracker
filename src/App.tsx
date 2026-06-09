@@ -955,64 +955,73 @@ export default function App() {
 
               {/* ── PER-PERSON PAID STATUS BAR (in Detail view) ── */}
               {(acd.transactions || []).length > 0 && (
-                <div className="person-bar">
+                <div style={{ display:"flex", flexWrap:"nowrap", gap:6, marginBottom:10, padding:"8px 12px", background:"rgba(250,129,40,.08)", borderRadius:8, overflowX:"auto", alignItems:"flex-start" }}>
                   {visiblePeople(activeCard).map(function (p) {
-                    const t       = cardPersonTotal(acd, p);
-                    const isPaid  = !!(acd.paidBy && acd.paidBy[p]);
+                    const t         = cardPersonTotal(acd, p);
+                    const isPaid    = !!(acd.paidBy && acd.paidBy[p]);
                     const canToggle = isAdmin || p === currentUser;
                     const canHide   = isAdmin && t === 0;
                     return (
-                      <div key={p} className="person-chip">
-                        <div className="pchip-name">
+                      <div key={p} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2, minWidth:64, maxWidth:80, flexShrink:0 }}>
+                        {/* Name row */}
+                        <div style={{ fontSize:9, color:"#D46820", textTransform:"uppercase", letterSpacing:".05em", display:"flex", alignItems:"center", gap:2 }}>
                           {p}
-                          {/* Hide button: admin only, zero balance only */}
                           {canHide && (
                             <span
-                              className="pchip-hide"
+                              style={{ cursor:"pointer", color:"#B84A08", fontSize:11, opacity:0.5, lineHeight:1 }}
                               title={"Hide " + p + " from this card"}
+                              onMouseEnter={function(e){(e.target as HTMLElement).style.opacity="1";(e.target as HTMLElement).style.color="#ef4444";}}
+                              onMouseLeave={function(e){(e.target as HTMLElement).style.opacity="0.5";(e.target as HTMLElement).style.color="#B84A08";}}
                               onClick={function () { hidePersonFromCard(activeCard, p); }}>×</span>
                           )}
-                          {isAdmin && !DEFAULT_PEOPLE.includes(p) && t > 0 && (
-                            <span className="pchip-remove" onClick={function () { removePerson(p); }} title={"Remove " + p}>×</span>
-                          )}
                         </div>
-                        <div className={t > 0 ? "pchip-amt on" : "pchip-amt"}>{t > 0 ? fmt(t) : "—"}</div>
-                        {/* Per-person paid toggle */}
+                        {/* Amount */}
+                        <div style={{ fontFamily:"Georgia,serif", fontSize:12, color: t > 0 ? "#FDF3E3" : "#B84A08" }}>{t > 0 ? fmt(t) : "—"}</div>
+                        {/* Paid toggle — only shown if person has a balance */}
                         {t > 0 && (
-                          <div
-                            className={isPaid ? "person-paid-toggle paid" : "person-paid-toggle unpaid"}
-                            style={{ cursor: canToggle ? "pointer" : "default", opacity: canToggle ? 1 : 0.4 }}
-                            title={canToggle ? (isPaid ? "Mark " + p + " as Unpaid" : "Mark " + p + " as Paid") : "Only " + p + " or admin can toggle"}
-                            onClick={function () { if (canToggle) togglePersonPaid(activeCard, p); }}>
+                          <span
+                            onClick={function () { if (canToggle) togglePersonPaid(activeCard, p); }}
+                            title={canToggle ? (isPaid ? "Mark " + p + " Unpaid" : "Mark " + p + " Paid") : "Only " + p + " or admin can toggle"}
+                            style={{
+                              display:"inline-flex", alignItems:"center", justifyContent:"center",
+                              marginTop:2, padding:"2px 5px", borderRadius:20,
+                              fontSize:9, fontWeight:700, whiteSpace:"nowrap",
+                              cursor: canToggle ? "pointer" : "default",
+                              opacity: canToggle ? 1 : 0.4,
+                              background: isPaid ? "rgba(52,211,153,.15)" : "rgba(248,113,113,.10)",
+                              color:      isPaid ? "#34d399"               : "#f87171",
+                              border:     isPaid ? "1px solid rgba(52,211,153,.35)" : "1px solid rgba(248,113,113,.25)",
+                            }}>
                             {isPaid ? "✓ Paid" : "✗ Unpaid"}
-                          </div>
+                          </span>
                         )}
                       </div>
                     );
                   })}
-                  <div className="person-chip grand-chip">
-                    <div className="pchip-name">TOTAL</div>
-                    <div className="pchip-amt on">{fmt(cardGrandTotal(acd, people))}</div>
+
+                  {/* Grand total chip */}
+                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2, minWidth:64, flexShrink:0 }}>
+                    <div style={{ fontSize:9, color:"#E07830", textTransform:"uppercase", letterSpacing:".05em" }}>TOTAL</div>
+                    <div style={{ fontFamily:"Georgia,serif", fontSize:12, color:"#FA8128" }}>{fmt(cardGrandTotal(acd, people))}</div>
                   </div>
-                  {/* Show hidden people restore area (admin only) */}
+
+                  {/* Hidden people restore chip (admin only) */}
                   {isAdmin && hiddenPeopleForCard(activeCard).length > 0 && (
-                    <div className="person-chip hidden-chip">
+                    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2, minWidth:64, flexShrink:0, position:"relative" }}>
                       <div
-                        className="pchip-name"
-                        style={{ cursor:"pointer", color: showHiddenFor === activeCard ? "#FA8128" : "#C85A10" }}
+                        style={{ fontSize:9, color: showHiddenFor === activeCard ? "#FA8128" : "#C85A10", textTransform:"uppercase", letterSpacing:".05em", cursor:"pointer" }}
                         onClick={function () { setShowHiddenFor(showHiddenFor === activeCard ? null : activeCard); }}>
                         {hiddenPeopleForCard(activeCard).length} hidden {showHiddenFor === activeCard ? "▴" : "▾"}
                       </div>
                       {showHiddenFor === activeCard && (
-                        <div className="hidden-people-list">
+                        <div style={{ position:"absolute", top:"100%", left:0, zIndex:50, background:"#3D2410", border:"1px solid rgba(250,129,40,0.3)", borderRadius:8, padding:"6px 0", minWidth:110, boxShadow:"0 8px 24px rgba(0,0,0,.5)", marginTop:4 }}>
                           {hiddenPeopleForCard(activeCard).map(function (p) {
                             return (
-                              <div key={p} className="hidden-person-row">
+                              <div key={p} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"5px 12px", fontSize:11, color:"#D46820", gap:10 }}>
                                 <span>{p}</span>
                                 <span
-                                  className="restore-btn"
-                                  onClick={function () { showPersonOnCard(activeCard, p); }}
-                                  title={"Show " + p + " again"}>show</span>
+                                  style={{ cursor:"pointer", color:"#4ade80", fontSize:10, fontWeight:700, textTransform:"uppercase" }}
+                                  onClick={function () { showPersonOnCard(activeCard, p); }}>show</span>
                               </div>
                             );
                           })}
