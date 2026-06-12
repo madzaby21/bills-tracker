@@ -270,9 +270,24 @@ export default function App() {
     return unsub;
   }, []);
 
-  // ── Hidden people — load from Firebase on mount ────────────────────────
+  // ── Load cards, people, hiddenPeople from Firebase on mount ────────────
 
   useEffect(function () {
+    // Load cards
+    getDoc(doc(db, "config", "cards")).then(function (snap) {
+      if (snap.exists() && Array.isArray(snap.data()?.list) && snap.data().list.length > 0) {
+        setCards(snap.data().list as CardDef[]);
+      }
+    }).catch(function () {});
+
+    // Load people
+    getDoc(doc(db, "config", "people")).then(function (snap) {
+      if (snap.exists() && Array.isArray(snap.data()?.list) && snap.data().list.length > 0) {
+        setPeople(snap.data().list as string[]);
+      }
+    }).catch(function () {});
+
+    // Load hiddenPeople
     getDoc(doc(db, "config", "hiddenPeople")).then(function (snap) {
       if (snap.exists() && snap.data()?.map) {
         setHiddenPeople(snap.data().map as { [cardId: string]: string[] });
