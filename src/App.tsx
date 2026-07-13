@@ -167,8 +167,17 @@ export default function App() {
   const today = new Date();
 
   // ── Identity ──
+  // We store both the name AND a session token set at login time.
+  // If the token is missing or mismatched, treat as logged out.
   const [currentUser, setCurrentUser] = useState<string>(() => {
-    return localStorage.getItem("bills_user") || "";
+    const name  = localStorage.getItem("bills_user") || "";
+    const token = localStorage.getItem("bills_token") || "";
+    // Token must exist and match "verified_" + name to be trusted
+    if (name && token === "verified_" + name) return name;
+    // Clear stale data
+    localStorage.removeItem("bills_user");
+    localStorage.removeItem("bills_token");
+    return "";
   });
   const [nameInput, setNameInput]   = useState("");
   const [pinInput,  setPinInput]    = useState("");
@@ -251,6 +260,7 @@ export default function App() {
         // Set admin PIN automatically from whatever they typed
         await savePinToFirebase(name, pin);
         localStorage.setItem("bills_user", name);
+        localStorage.setItem("bills_token", "verified_" + name);
         setCurrentUser(name);
         setPinLoading(false);
         return;
@@ -270,6 +280,7 @@ export default function App() {
         return;
       }
       localStorage.setItem("bills_user", name);
+      localStorage.setItem("bills_token", "verified_" + name);
       setCurrentUser(name);
     } catch {
       setPinLoading(false);
@@ -994,6 +1005,7 @@ export default function App() {
             {isAdmin && <span className="admin-badge">Admin</span>}
             <button className="switch-user-btn" onClick={function () {
               localStorage.removeItem("bills_user");
+            localStorage.removeItem("bills_token");
               setCurrentUser("");
               setNameInput("");
               setPinInput("");
