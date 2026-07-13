@@ -137,6 +137,30 @@ async function logAudit(entry: AuditEntry): Promise<void> {
   } catch { /* non-critical */ }
 }
 
+// ─── PIN HASHING (simple SHA-256 via WebCrypto) ──────────────────────────────
+
+async function hashPin(name: string, pin: string): Promise<string> {
+  const raw = name.toLowerCase() + ":" + pin;
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
+  return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+}
+
+async function savePinToFirebase(name: string, pin: string): Promise<void> {
+  const hash = await hashPin(name, pin);
+  await setDoc(doc(db, "config", "pins"), { [name]: hash }, { merge: true });
+}
+
+async function verifyPin(name: string, pin: string): Promise<boolean> {
+  try {
+    const snap = await getDoc(doc(db, "config", "pins"));
+    if (!snap.exists()) return false;
+    const stored = snap.data()[name];
+    if (!stored) return false;
+    const hash = await hashPin(name, pin);
+    return hash === stored;
+  } catch { return false; }
+}
+
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -146,8 +170,17 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<string>(() => {
     return localStorage.getItem("bills_user") || "";
   });
-  const [nameInput, setNameInput] = useState("");
+  const [nameInput, setNameInput]   = useState("");
+  const [pinInput,  setPinInput]    = useState("");
+  const [pinError,  setPinError]    = useState("");
+  const [pinLoading, setPinLoading] = useState(false);
   const isAdmin = currentUser === ADMIN;
+
+  // ── PIN management (admin only) ──
+  const [showPinManager, setShowPinManager] = useState(false);
+  const [pinTarget,  setPinTarget]  = useState("");
+  const [newPin,     setNewPin]     = useState("");
+  const [pinSaving,  setPinSaving]  = useState(false);
 
   // ── Cards (dynamic) ──
   const [cards, setCards] = useState<CardDef[]>(DEFAULT_CARDS);
@@ -195,19 +228,69 @@ export default function App() {
     setTimeout(function () { setBanner(null); }, 3000);
   }
 
-  // ── Name setup ──────────────────────────────────────────────────────────
+  // ── Login with PIN ──────────────────────────────────────────────────────
 
-  function submitName() {
+  async function submitLogin() {
     const name = nameInput.trim();
-    const matched = people.find(function (p) {
-      return p.toLowerCase() === name.toLowerCase();
-    });
-    if (!matched) {
-      showBanner("Name not recognized. Enter your exact name as listed.", "error");
-      return;
+    const pin  = pinInput.trim();
+    if (!name) { setPinError("Please select your name."); return; }
+    if (pin.length !== 4) { setPinError("PIN must be 4 digits."); return; }
+    setPinLoading(true);
+    setPinError("");
+    try {
+      // Check if ANY pins have been set yet
+      const pinsSnap = await getDoc(doc(db, "config", "pins"));
+      const noPinsExist = !pinsSnap.exists() || Object.keys(pinsSnap.data() || {}).length === 0;
+      // First-time setup: only Madz (admin) can get in, with any 4-digit PIN which becomes their PIN
+      if (noPinsExist) {
+        if (name !== ADMIN) {
+          setPinError("No PINs set up yet. Ask " + ADMIN + " to set up PINs first.");
+          setPinLoading(false);
+          return;
+        }
+        // Set admin PIN automatically from whatever they typed
+        await savePinToFirebase(name, pin);
+        localStorage.setItem("bills_user", name);
+        setCurrentUser(name);
+        setPinLoading(false);
+        return;
+      }
+      // Normal login
+      const ok = await verifyPin(name, pin);
+      setPinLoading(false);
+      if (!ok) {
+        // Check if this person has no PIN yet
+        const theirPin = pinsSnap.data()?.[name];
+        if (!theirPin) {
+          setPinError("No PIN set for you yet. Ask " + ADMIN + " to set your PIN.");
+        } else {
+          setPinError("Incorrect PIN. Try again.");
+        }
+        setPinInput("");
+        return;
+      }
+      localStorage.setItem("bills_user", name);
+      setCurrentUser(name);
+    } catch {
+      setPinLoading(false);
+      setPinError("Connection error. Check your internet and try again.");
     }
-    localStorage.setItem("bills_user", matched);
-    setCurrentUser(matched);
+  }
+
+  // ── Admin: set/reset someone's PIN ──────────────────────────────────────
+
+  async function adminSetPin() {
+    if (!pinTarget) { showBanner("Select a person", "warn"); return; }
+    if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
+      showBanner("PIN must be exactly 4 digits", "warn"); return;
+    }
+    setPinSaving(true);
+    await savePinToFirebase(pinTarget, newPin);
+    setPinSaving(false);
+    setNewPin("");
+    setPinTarget("");
+    showBanner("PIN set for " + pinTarget, "success");
+    logAudit({ who: currentUser, action: "edited", detail: "PIN updated for " + pinTarget, card: "—", month: MONTHS[month] + " " + year, ts: Date.now() });
   }
 
   // ── Load month ──────────────────────────────────────────────────────────
@@ -625,25 +708,53 @@ export default function App() {
     }, 0);
   }
 
-  // ── Name prompt screen ──────────────────────────────────────────────────
+  // ── Login screen ────────────────────────────────────────────────────────
 
   if (!currentUser) {
+    // First-time setup: no PINs exist yet, only show to admin by name match
+    const isFirstSetup = !pinLoading && nameInput === ADMIN && pinInput === "" && false; // handled below
+
     return (
       <div className="name-screen">
         <div className="name-box">
           <div className="name-title">Bills Tracker</div>
-          <div className="name-sub">Enter your name to continue</div>
-          {banner && <div className={"banner banner-" + banner.type}>{banner.msg}</div>}
-          <input
-            className="name-input"
-            value={nameInput}
-            onChange={function (e) { setNameInput(e.target.value); }}
-            onKeyDown={function (e) { if (e.key === "Enter") submitName(); }}
-            placeholder="e.g. Madz, Aby, Nick…"
-            autoFocus
-          />
-          <button className="name-btn" onClick={submitName}>Continue</button>
-          <div className="name-hint">Your name is saved on this device. You won't need to enter it again.</div>
+          <div className="name-sub">Select your name and enter your PIN</div>
+          {pinError && (
+            <div style={{ background:"#7f1d1d", color:"#fca5a5", border:"1px solid #991b1b", borderRadius:8, padding:"10px 14px", fontSize:13, fontWeight:600 }}>
+              {pinError}
+            </div>
+          )}
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+              <label style={{ fontSize:10, color:"#C85A10", textTransform:"uppercase", letterSpacing:".08em" }}>Your Name</label>
+              <select
+                className="name-input"
+                style={{ cursor:"pointer" }}
+                value={nameInput}
+                onChange={function (e) { setNameInput(e.target.value); setPinError(""); setPinInput(""); }}>
+                <option value="">Select your name…</option>
+                {people.map(function (p) { return <option key={p} value={p}>{p}</option>; })}
+              </select>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+              <label style={{ fontSize:10, color:"#C85A10", textTransform:"uppercase", letterSpacing:".08em" }}>PIN</label>
+              <input
+                className="name-input"
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                value={pinInput}
+                onChange={function (e) { setPinInput(e.target.value.replace(/[^0-9]/g, "")); setPinError(""); }}
+                onKeyDown={function (e) { if (e.key === "Enter") submitLogin(); }}
+                placeholder="4-digit PIN"
+                style={{ letterSpacing:"0.4em", fontSize:20, textAlign:"center" }}
+              />
+            </div>
+          </div>
+          <button className="name-btn" onClick={submitLogin} disabled={pinLoading || !nameInput}>
+            {pinLoading ? "Checking…" : "Sign In"}
+          </button>
+          <div className="name-hint">Forgot your PIN? Ask Madz to reset it from inside the app.</div>
         </div>
       </div>
     );
@@ -833,6 +944,47 @@ export default function App() {
         </div>
       )}
 
+      {/* ── PIN MANAGER MODAL (admin only) ── */}
+      {showPinManager && isAdmin && (
+        <div className="modal-backdrop" onClick={function () { setShowPinManager(false); }}>
+          <div className="modal" onClick={function (e) { e.stopPropagation(); }}>
+            <div className="modal-title">Manage PINs</div>
+            <div className="modal-tx-name" style={{ color:"#C85A10" }}>Set or reset a person's 4-digit PIN</div>
+            <div className="modal-body">
+              <div className="modal-row">
+                <label className="modal-lbl">Person</label>
+                <select className="modal-sel" value={pinTarget}
+                  onChange={function (e) { setPinTarget(e.target.value); }}>
+                  <option value="">Select…</option>
+                  {people.map(function (p) { return <option key={p} value={p}>{p}</option>; })}
+                </select>
+              </div>
+              <div className="modal-row">
+                <label className="modal-lbl">New PIN</label>
+                <input
+                  className="modal-sel"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="4 digits"
+                  value={newPin}
+                  onChange={function (e) { setNewPin(e.target.value.replace(/[^0-9]/g, "")); }}
+                  onKeyDown={function (e) { if (e.key === "Enter") adminSetPin(); }}
+                  style={{ flex:1, letterSpacing:"0.3em", fontSize:18 }}
+                />
+              </div>
+            </div>
+            <div className="modal-note">PINs are hashed before saving — not readable by anyone, including admin.</div>
+            <div className="modal-actions">
+              <button className="modal-cancel" onClick={function () { setShowPinManager(false); setNewPin(""); setPinTarget(""); }}>Close</button>
+              <button className="modal-confirm" onClick={adminSetPin} disabled={pinSaving}>
+                {pinSaving ? "Saving…" : "Set PIN"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── HEADER ── */}
       <div className="header">
         <div>
@@ -844,7 +996,12 @@ export default function App() {
               localStorage.removeItem("bills_user");
               setCurrentUser("");
               setNameInput("");
-            }}>Switch</button>
+              setPinInput("");
+            }}>Sign Out</button>
+            {isAdmin && (
+              <button className="switch-user-btn" style={{ color:"#FA8128", borderColor:"rgba(250,129,40,0.4)" }}
+                onClick={function () { setShowPinManager(true); }}>Manage PINs</button>
+            )}
           </div>
         </div>
         <div className="header-right">
