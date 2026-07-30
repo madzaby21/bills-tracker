@@ -226,9 +226,13 @@ export default function App() {
   const [moveModal, setMoveModal]     = useState<MoveModal | null>(null);
   const [copyModal, setCopyModal]     = useState<CopyModal | null>(null);
 
-  // ── Drag ──
+  // ── Drag (transactions) ──
   const dragIdx  = useRef<number | null>(null);
   const dragOver = useRef<number | null>(null);
+
+  // ── Drag (sidebar cards) ──
+  const cardDragIdx  = useRef<number | null>(null);
+  const cardDragOver = useRef<number | null>(null);
 
   // ── Banner ──
   const [banner, setBanner] = useState<{msg:string; type:"success"|"warn"|"error"}|null>(null);
@@ -605,6 +609,26 @@ export default function App() {
     });
     dragIdx.current  = null;
     dragOver.current = null;
+  }
+
+  // ── Reorder sidebar cards ───────────────────────────────────────────────
+
+  function onCardDragStart(idx: number) { cardDragIdx.current = idx; }
+  function onCardDragEnter(idx: number) { cardDragOver.current = idx; }
+  function onCardDragEnd() {
+    const from = cardDragIdx.current;
+    const to   = cardDragOver.current;
+    if (from === null || to === null || from === to) {
+      cardDragIdx.current  = null;
+      cardDragOver.current = null;
+      return;
+    }
+    const reordered = [...cards];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+    saveCards(reordered);
+    cardDragIdx.current  = null;
+    cardDragOver.current = null;
   }
 
   // ── Move transaction ────────────────────────────────────────────────────
@@ -1051,15 +1075,21 @@ export default function App() {
         {view === "detail" && isAdmin && (
           <div className="detail-layout">
             <div className="sidebar">
-              {cards.map(function (c) {
+              {cards.map(function (c, idx) {
                 const cd    = getCard(year, month, c.id);
                 const grand = cardGrandTotal(cd, people);
                 const on    = activeCard === c.id;
                 // Count how many people have paid for this card
                 const paidCount = people.filter(function (p) { return cd.paidBy && cd.paidBy[p]; }).length;
                 return (
-                  <button key={c.id} className={on ? "side-btn on" : "side-btn"}
-                    style={on ? { borderColor: c.color + "70", background: c.color + "14" } : {}}
+                  <button key={c.id}
+                    className={on ? "side-btn on" : "side-btn"}
+                    style={{ ...(on ? { borderColor: c.color + "70", background: c.color + "14" } : {}), cursor:"grab" }}
+                    draggable
+                    onDragStart={function (e) { e.stopPropagation(); onCardDragStart(idx); }}
+                    onDragEnter={function (e) { e.stopPropagation(); onCardDragEnter(idx); }}
+                    onDragEnd={function (e) { e.stopPropagation(); onCardDragEnd(); }}
+                    onDragOver={function (e) { e.preventDefault(); e.stopPropagation(); }}
                     onClick={function () { setActiveCard(c.id); }}>
                     <div className="side-dot" style={{ background: c.color, boxShadow: on ? "0 0 6px " + c.color : "none" }} />
                     <div className="side-info">
