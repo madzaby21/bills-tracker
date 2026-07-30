@@ -1080,7 +1080,6 @@ export default function App() {
                 const grand = cardGrandTotal(cd, people);
                 const on    = activeCard === c.id;
                 // Count how many people have paid for this card
-                const paidCount = people.filter(function (p) { return cd.paidBy && cd.paidBy[p]; }).length;
                 return (
                   <button key={c.id}
                     className={on ? "side-btn on" : "side-btn"}
@@ -1097,9 +1096,6 @@ export default function App() {
                       <div className="side-meta">
                         <span className={grand > 0 ? "side-total" : "side-empty"}>{grand > 0 ? fmt(grand) : "No entries"}</span>
                         {cd.dueDay && <span className="side-due"> · due {formatDate(cd.dueDay)}</span>}
-                        {paidCount > 0 && (
-                          <span style={{ marginLeft:4, fontSize:10, color:"#34d399" }}>· {paidCount}/{people.length} paid</span>
-                        )}
                       </div>
                     </div>
                     {cd.paid && <span className="chk">✓</span>}
